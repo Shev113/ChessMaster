@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Chessboard background -->
+    <path android:fillColor="#FFFFFF" android:pathData="M22,22h16v16h-16zM54,22h16v16h-16zM38,38h16v16h-16z" />
+    <path android:fillColor="#4A6741" android:pathData="M38,22h16v16h-16zM22,38h16v16h-16zM54,38h16v16h-16z" />
+    <!-- Chess knight silhouette -->
+    <path android:fillColor="#1C1B1A"
+        android:pathData="M54,58c-2.2,0 -4,1.8 -4,4v2c0,0.6 0.4,1 1,1h2l-1,4c-0.2,0.8 0.3,1.6 1.1,1.8c0.8,0.2 1.6,-0.2 1.9,-1l1,-4h2c0.6,0 1,-0.4 1,-1v-2c0,-2.2 -1.8,-4 -4,-4zM50,68c-2.2,0 -4,1.8 -4,4v2c0,0.6 0.4,1 1,1h14c0.6,0 1,-0.4 1,-1v-2c0,-2.2 -1.8,-4 -4,-4h-8z" />
+</vector>

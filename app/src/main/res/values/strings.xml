@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ChessMaster</string>
+    <string name="new_game">Новая игра</string>
+    <string name="undo">Назад</string>
+    <string name="flip">Флип</string>
+    <string name="analyze">Анализ</string>
+    <string name="your_turn">Ваш ход</string>
+    <string name="ai_turn">Ход соперника</string>
+    <string name="white">Белые</string>
+    <string name="black">Чёрные</string>
+    <string name="game_over">Игра окончена</string>
+    <string name="analysis_title">Анализ партии</string>
+    <string name="back_to_game">Вернуться к игре</string>
+    <string name="engine_error">Ошибка движка</string>
+    <string name="resign">Сдаться</string>
+</resources>

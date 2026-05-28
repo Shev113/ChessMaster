@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="light_square">#FFF0D9B5</color>
+    <color name="dark_square">#FFB58863</color>
+    <color name="highlight_last">#80CDD26A</color>
+    <color name="highlight_selected">#80FFC800</color>
+    <color name="blunder">#FFDC1E1E</color>
+    <color name="mistake">#FFF08C1E</color>
+    <color name="inaccuracy">#FFF0D232</color>
+    <color name="best_move_arrow">#8064C864</color>
+    <color name="ic_launcher_background">#4A6741</color>
+</resources>

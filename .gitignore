@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Android
+local.properties
+
+# Kotlin
+*.class
+
+# Stockfish build
+tools/build/stockfish-src/
+tools/build/*.tar.gz
+
+# Python
+__pycache__/
+*.pyc
