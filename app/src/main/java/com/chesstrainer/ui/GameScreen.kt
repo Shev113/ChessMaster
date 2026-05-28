@@ -40,6 +40,7 @@ fun GameScreen(
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var showNewGameDialog by remember { mutableStateOf(true) }
     var playerColor by remember { mutableStateOf(true) }
+    var sfLoading by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     if (showNewGameDialog) {
@@ -54,6 +55,7 @@ fun GameScreen(
                 moveHistoryDisplay = emptyList()
                 flipped = !color
 
+                sfLoading = true
                 scope.launch {
                     try {
                         withContext(Dispatchers.IO) {
@@ -70,6 +72,7 @@ fun GameScreen(
                         if (!color) {
                             aiThinking = true
                             val best = StockfishEngine.bestMove(gameState!!.fen, 1000)
+                            sfLoading = false
                             if (best.bestMove.isNotEmpty()) {
                                 val result = ChessGame.aiMoveAsync(best.bestMove)
                                 gameState = gameState?.copy(
@@ -83,8 +86,12 @@ fun GameScreen(
                         }
                     } catch (e: Exception) {
                         errorMsg = "Ошибка: ${e.message}"
-                        aiThinking = false
+                        aiThinking = false; sfLoading = false
                     }
+                }
+                scope.launch {
+                    StockfishEngine.awaitReady()
+                    sfLoading = false
                 }
             }
         )
@@ -106,13 +113,13 @@ fun GameScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
             Text(
                 text = when {
                     gs.gameOver -> "Игра окончена: ${gs.result ?: "?"}"
@@ -128,6 +135,13 @@ fun GameScreen(
                     else -> MaterialTheme.colorScheme.onSurface
                 },
                 modifier = Modifier.padding(8.dp),
+            )
+
+            Text(
+                text = if (StockfishEngine.available) "[Stockfish]" else "[SimpleAI]",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (StockfishEngine.available) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                modifier = Modifier.padding(bottom = 4.dp),
             )
 
             BoardView(
@@ -287,6 +301,24 @@ fun GameScreen(
                 Text(errorMsg!!, color = Color.Red, modifier = Modifier.padding(8.dp), textAlign = TextAlign.Center)
             }
         }
+
+        if (sfLoading) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    CircularProgressIndicator(color = Color.White)
+                    Spacer(Modifier.height(16.dp))
+                    Text("Загрузка Stockfish...", color = Color.White)
+                }
+            }
+        }
+    }
     }
 }
 

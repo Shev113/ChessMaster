@@ -2,6 +2,9 @@ package com.chesstrainer
 
 import android.content.Context
 import android.util.Log
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,10 +18,7 @@ object StockfishEngine {
     private var reader: BufferedReader? = null
     private var hashMB = 64
     private var engineThreads = 1
-    @Volatile
-    private var _available = false
-    val available: Boolean get() = _available
-    @Volatile
+    var available by mutableStateOf(false)
     private var ready = CompletableDeferred<Unit>().apply { complete(Unit) }
 
     fun start(context: Context, hash: Int = 64, threads: Int = 1) {
@@ -47,7 +47,7 @@ object StockfishEngine {
         } catch (_: Exception) { 4096 }
 
         if (pageSize > 4096) {
-            _available = false
+            available = false
             ready.complete(Unit)
             Log.w("ChessTrainer", "16KB page — Stockfish unavailable")
             return
@@ -56,43 +56,49 @@ object StockfishEngine {
         hashMB = hash.coerceIn(16, 512)
         engineThreads = threads.coerceIn(1, 4)
 
-        val binaryName = findAnyBinary(context)
-        if (binaryName == null) {
-            _available = false
-            ready.complete(Unit)
-            Log.w("ChessTrainer", "No binary for arch ${getArch()}")
-            return
-        }
-
         try {
-            val baseDir = try {
-                val dir = java.io.File(context.codeCacheDir, "stockfish")
-                dir.mkdirs(); dir
-            } catch (_: Exception) { context.filesDir }
-            val bin = java.io.File(baseDir, binaryName)
-
-            context.assets.open(binaryName).use { src ->
-                bin.outputStream().use { dst -> src.copyTo(dst) }
+            val bin = tryRunNativeLib(context) ?: run {
+                val binaryName = findAnyBinary(context)
+                if (binaryName == null) { available = false; ready.complete(Unit); Log.w("ChessTrainer", "No binary for arch ${getArch()}"); return }
+                val baseDir = try {
+                    val dir = java.io.File(context.codeCacheDir, "stockfish")
+                    dir.mkdirs(); dir
+                } catch (_: Exception) { context.filesDir }
+                val bin = java.io.File(baseDir, binaryName)
+                val t0 = System.currentTimeMillis()
+                context.assets.open(binaryName).use { src ->
+                    bin.outputStream().use { dst -> src.copyTo(dst) }
+                }
+                Log.d("ChessTrainer", "Extracted ${binaryName} (${(System.currentTimeMillis() - t0) / 1000}s)")
+                bin.setExecutable(true, false)
+                bin
             }
-            bin.setExecutable(true, false)
 
-            val linker = if (java.io.File("/system/bin/linker64").exists()) "/system/bin/linker64" else "/system/bin/linker"
-            val pb = ProcessBuilder(linker, bin.absolutePath)
-            pb.directory(bin.parentFile)
-            pb.redirectErrorStream(true)
-            process = pb.start()
+            process = try {
+                ProcessBuilder(bin.absolutePath).apply {
+                    directory(bin.parentFile)
+                    redirectErrorStream(true)
+                }.start().also { Log.d("ChessTrainer", "Running directly") }
+            } catch (e: Exception) {
+                Log.d("ChessTrainer", "Direct exec failed: ${e.message}, trying linker64")
+                val linker = if (java.io.File("/system/bin/linker64").exists()) "/system/bin/linker64" else "/system/bin/linker"
+                ProcessBuilder(linker, bin.absolutePath).apply {
+                    directory(bin.parentFile)
+                    redirectErrorStream(true)
+                }.start().also { Log.d("ChessTrainer", "Running via $linker") }
+            }
             writer = OutputStreamWriter(process!!.outputStream, "UTF-8")
             reader = BufferedReader(InputStreamReader(process!!.inputStream, "UTF-8"))
 
-            send("uci"); if (!waitFor("uciok", 3000)) { Log.w("ChessTrainer", "uciok timeout"); stop(); _available = false; ready.complete(Unit); return }
+            send("uci"); if (!waitFor("uciok", 30000)) { Log.w("ChessTrainer", "uciok timeout"); val exit = process?.exitValue(); if (exit != null) Log.e("ChessTrainer", "process exited: $exit"); stop(); available = false; ready.complete(Unit); return }
             send("setoption name Hash value $hashMB")
             send("setoption name Threads value $engineThreads")
-            send("isready"); if (!waitFor("readyok", 3000)) { Log.w("ChessTrainer", "readyok timeout"); stop(); _available = false; ready.complete(Unit); return }
-            _available = true
+            send("isready"); if (!waitFor("readyok", 10000)) { Log.w("ChessTrainer", "readyok timeout"); stop(); available = false; ready.complete(Unit); return }
+            available = true
             ready.complete(Unit)
         } catch (e: Exception) {
             Log.e("ChessTrainer", "Stockfish start failed: ${e.message}", e)
-            stop(); _available = false; ready.complete(Unit)
+            stop(); available = false; ready.complete(Unit)
         }
     }
 
@@ -112,7 +118,7 @@ object StockfishEngine {
     suspend fun bestMove(fen: String, timeMs: Int = 2000): BestMoveResult =
         withContext(Dispatchers.IO) {
             ready.await()
-            if (!_available) return@withContext SimpleAI.bestMove(fen, 3)
+            if (!available) return@withContext SimpleAI.bestMove(fen, 3)
             try { search(fen, timeMs, 1).first() }
             catch (_: Exception) { SimpleAI.bestMove(fen, 3) }
         }
@@ -120,7 +126,7 @@ object StockfishEngine {
     suspend fun evalPosition(fen: String, timeMs: Int = 1000): BestMoveResult =
         withContext(Dispatchers.IO) {
             ready.await()
-            if (!_available) return@withContext SimpleAI.bestMove(fen, 2)
+            if (!available) return@withContext SimpleAI.bestMove(fen, 2)
             try { search(fen, timeMs, 1).first() }
             catch (_: Exception) { SimpleAI.bestMove(fen, 2) }
         }
@@ -166,6 +172,15 @@ object StockfishEngine {
             context.assets.open(name).close()
             true
         } catch (_: Exception) { false }
+    }
+
+    private fun tryRunNativeLib(context: Context): java.io.File? {
+        val dir = context.applicationInfo.nativeLibraryDir ?: return null
+        val lib = java.io.File(dir, "libstockfish.so")
+        if (!lib.exists()) { Log.d("ChessTrainer", "No native lib at $dir/libstockfish.so"); return null }
+        Log.d("ChessTrainer", "Found native lib at ${lib.absolutePath}")
+        lib.setExecutable(true, false)
+        return lib
     }
 
     private fun send(cmd: String) {
